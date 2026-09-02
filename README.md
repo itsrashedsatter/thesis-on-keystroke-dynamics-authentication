@@ -99,7 +99,4 @@ python feature_engineering_and_preprocessing.py
 
 ---
 
-## 👥 Authors & Academic Context
-- **Researcher**: [Rashed Satter](https://github.com/itsrashedsatter)
-- **Topic**: Behavior-Based Continuous Verification using Keystroke Dynamics
-- **Domain**: Cybersecurity, Behavioral Biometrics, Zero Trust Architecture (ZTA)
+
