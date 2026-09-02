@@ -1,0 +1,16 @@
+# Large raw dataset archive (168k unmerged raw text files)
+Thesis P2 Keyboard dynamics dataset/
+
+# Python cache & virtualenvs
+__pycache__/
+*.py[cod]
+*$py.class
+.env
+.venv
+env/
+venv/
+.ipynb_checkpoints/
+
+# System files
+.DS_Store
+Thumbs.db
