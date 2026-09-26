@@ -4,6 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Research: Biometrics](https://img.shields.io/badge/Research-Behavioral%20Biometrics-success.svg)]()
 [![Zero Trust: Continuous Auth](https://img.shields.io/badge/Zero%20Trust-Continuous%20Verification-orange.svg)]()
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/itsrashedsatter/thesis-on-keystroke-dynamics-authentication/blob/main/keystroke_dynamics_pipeline.ipynb)
 
 > **University Thesis Project**: Continuous behavioral biometric authentication and closed-set user identification using temporal keystroke dynamics and digram latency modeling under a Zero Trust Architecture (ZTA).
 
@@ -73,15 +74,46 @@ Traditional point-of-entry authentication mechanisms (passwords, PINs, OTPs) ver
 │   ├── scaler.joblib                 # Serialized fitted StandardScaler object
 │   ├── label_encoder.joblib          # Serialized LabelEncoder for 60 target classes
 │   └── label_mapping.json            # Participant ID to class index dictionary
+├── 04_model_training/
+│   ├── evaluation_utils.py           # Shared evaluation, metrics, and confusion matrix module
+│   ├── train_random_forest.py        # Random Forest training pipeline (Baseline)
+│   ├── train_cnn.py                  # 1D-CNN training pipeline (GlobalAveragePooling1D)
+│   ├── train_lstm.py                 # Bidirectional LSTM training pipeline
+│   ├── requirements_stage04.txt      # Model training dependencies
+│   ├── rf_model.joblib               # Trained Random Forest serialized model
+│   ├── cnn_model.keras               # Trained 1D-CNN serialized Keras model
+│   ├── lstm_model.keras              # Trained BiLSTM serialized Keras model
+│   ├── *_confusion_matrix.png        # 60x60 multiclass evaluation heatmaps
+│   └── *_metrics.json                # Structured evaluation benchmarks
 ├── inspect_and_merge.py              # Automated data ingestion pipeline
 ├── clean_and_eda.py                  # Automated cleaning, timing extraction & EDA
 ├── feature_engineering_and_preprocessing.py # Feature engineering & preprocessing pipeline
+├── keystroke_dynamics_pipeline.ipynb # End-to-end interactive Google Colab notebook
 └── README.md                         # Project documentation
 ```
 
 ---
 
+## 🏆 Model Training & Benchmark Results (Stage 04)
+
+All models were evaluated on the held-out **180 test sessions** (3 sessions per participant across all 60 users) under a 60-class closed-set identification task (Random guess accuracy $= 1/60 \approx 1.67\%$).
+
+| Model Architecture | Test Accuracy | Macro F1 | Weighted F1 | Parameters | Key Architectural Characteristics |
+|---|:---:|:---:|:---:|:---:|---|
+| 🌲 **Random Forest** (Baseline) | **99.44%** | **0.9944** | **0.9944** | 300 trees | Non-linear tree partitions, invariant to monotonic scaling, superior tabular performance |
+| 🧠 **Bidirectional LSTM** | **86.67%** | **0.8620** | **0.8647** | ~104K | Forward & backward sequence modeling across keystroke latency transitions |
+| ⚡ **1D-CNN** | **65.56%** | **0.6491** | **0.6558** | ~20K | Multi-scale temporal filters, GaussianNoise augmentation, GlobalAveragePooling |
+
+---
+
 ## 🚀 Setup & Execution
+
+### Option A: Run in Google Colab (Recommended)
+Click the badge below to run the complete pipeline with GPU acceleration directly in your browser:
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/itsrashedsatter/thesis-on-keystroke-dynamics-authentication/blob/main/keystroke_dynamics_pipeline.ipynb)
+
+### Option B: Local Execution
 
 ```bash
 # 1. Clone repository
@@ -89,14 +121,13 @@ git clone https://github.com/itsrashedsatter/thesis-on-keystroke-dynamics-authen
 cd thesis-on-keystroke-dynamics-authentication
 
 # 2. Install dependencies
-pip install pandas numpy scikit-learn matplotlib seaborn scipy joblib pyarrow
+pip install -r 04_model_training/requirements_stage04.txt
 
-# 3. Run pipelines
-python inspect_and_merge.py
-python clean_and_eda.py
-python feature_engineering_and_preprocessing.py
+# 3. Run individual models
+python 04_model_training/train_random_forest.py
+python 04_model_training/train_cnn.py
+python 04_model_training/train_lstm.py
 ```
 
----
 
 

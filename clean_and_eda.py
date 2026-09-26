@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 def run_clean_and_eda():
-    base_dir = r"f:\thesis original"
+    base_dir = os.environ.get("THESIS_BASE_DIR", os.path.dirname(os.path.abspath(__file__)))
     input_file = os.path.join(base_dir, "01_data_merge", "merged_raw_keystrokes.csv")
     output_dir = os.path.join(base_dir, "02_cleaning_eda")
     plots_dir = os.path.join(output_dir, "plots")

@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 
 def run_inspection_and_merge():
-    base_dir = r"f:\thesis original"
+    base_dir = os.environ.get("THESIS_BASE_DIR", os.path.dirname(os.path.abspath(__file__)))
     data_dir = os.path.join(base_dir, "Thesis P2 Keyboard dynamics dataset", "Keystrokes", "files")
     output_dir = os.path.join(base_dir, "01_data_merge")
     os.makedirs(output_dir, exist_ok=True)

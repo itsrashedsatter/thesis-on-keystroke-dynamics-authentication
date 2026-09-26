@@ -8,7 +8,7 @@ from sklearn.preprocessing import LabelEncoder, StandardScaler
 from collections import Counter
 
 def run_feature_engineering():
-    base_dir = r"f:\thesis original"
+    base_dir = os.environ.get("THESIS_BASE_DIR", os.path.dirname(os.path.abspath(__file__)))
     input_file = os.path.join(base_dir, "02_cleaning_eda", "cleaned_keystrokes.csv")
     output_dir = os.path.join(base_dir, "03_feature_engineering_preprocessing")
     os.makedirs(output_dir, exist_ok=True)
