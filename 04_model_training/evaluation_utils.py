@@ -92,12 +92,15 @@ def evaluate_predictions(y_true, y_pred, label_encoder, model_name, output_dir):
         "num_classes": num_classes,
         "correct_predictions": correct,
         "accuracy": round(accuracy, 6),
+        "test_accuracy": round(accuracy, 6),
         "precision_macro": round(precision_macro, 6),
         "recall_macro": round(recall_macro, 6),
         "f1_macro": round(f1_macro, 6),
+        "macro_f1": round(f1_macro, 6),
         "precision_weighted": round(precision_weighted, 6),
         "recall_weighted": round(recall_weighted, 6),
         "f1_weighted": round(f1_weighted, 6),
+        "weighted_f1": round(f1_weighted, 6),
     }
 
     print(f"\n{'='*60}")
