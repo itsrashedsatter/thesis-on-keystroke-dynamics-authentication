@@ -98,11 +98,12 @@ Traditional point-of-entry authentication mechanisms (passwords, PINs, OTPs) ver
 
 All models were evaluated on the held-out **180 test sessions** (3 sessions per participant across all 60 users) under a 60-class closed-set identification task (Random guess accuracy $= 1/60 \approx 1.67\%$).
 
-| Model Architecture | Test Accuracy | Macro F1 | Weighted F1 | Parameters | Key Architectural Characteristics |
-|---|:---:|:---:|:---:|:---:|---|
-| 🌲 **Random Forest** (Baseline) | **99.44%** | **0.9944** | **0.9944** | 300 trees | Non-linear tree partitions, invariant to monotonic scaling, superior tabular performance |
-| 🧠 **Bidirectional LSTM** | **86.67%** | **0.8620** | **0.8647** | ~104K | Forward & backward sequence modeling across keystroke latency transitions |
-| ⚡ **1D-CNN** | **65.56%** | **0.6491** | **0.6558** | ~20K | Multi-scale temporal filters, GaussianNoise augmentation, GlobalAveragePooling |
+| Model Architecture | Colab GPU Accuracy | Local Accuracy | Macro F1 (Colab) | Weighted F1 (Colab) | Model Parameters | Key Architectural Characteristics |
+|---|:---:|:---:|:---:|:---:|:---:|---|
+| 🌲 **Random Forest** (Baseline) | **100.00%** | **99.44%** | **1.0000** | **1.0000** | 300 trees | Non-linear tree partitions, invariant to monotonic scaling, superior tabular biometric performance |
+| 🧠 **Bidirectional LSTM** | **87.78%** | **86.67%** | **0.8653** | **0.8653** | ~104K | Forward & backward sequence modeling across keystroke latency transitions |
+| ⚡ **1D-CNN** | **52.78%** | **65.56%** | **0.4692** | **0.4692** | ~20K | Multi-scale temporal filters, GaussianNoise augmentation, GlobalAveragePooling |
+| 🎲 *Random Guess Baseline* | *1.67%* | *1.67%* | — | — | — | Random chance baseline across 60 closed-set classes ($1/60$) |
 
 ---
 
