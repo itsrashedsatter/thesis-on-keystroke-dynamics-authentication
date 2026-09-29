@@ -1,0 +1,512 @@
+% ==========================================================
+% CHAPTER 4 — Design Process, Implementation, and Evaluation
+% ==========================================================
+% Required packages (add to your preamble if not already present):
+% \usepackage{amsmath, amssymb, booktabs, graphicx, listings, array, float, tikz, subcaption}
+% \usetikzlibrary{positioning, arrows.meta, shapes.geometric}
+% \lstset{basicstyle=\ttfamily\footnotesize, breaklines=true, frame=single, columns=fullflexible}
+% ==========================================================
+
+\section{Design Process or Methodology Overview}
+\label{sec:methodology}
+
+The objective of this thesis is to build a passive, continuous identity-verification mechanism based on keystroke dynamics that fits the \emph{never trust, always verify} principle of Zero Trust Architecture (ZTA). Rather than authenticating a user only once at login, the system repeatedly evaluates fine-grained typing behaviour and decides whether the person at the keyboard is still the claimed, enrolled user. The problem is formulated as a \emph{closed-set} identification/verification task over $C=60$ enrolled typists.
+
+\subsection{Objectives and Constraints}
+The design was guided by the following objectives and constraints.
+
+\begin{itemize}
+    \item \textbf{Objective 1 -- Continuity:} identity evidence must be derived from ordinary typing, with no extra user action after login.
+    \item \textbf{Objective 2 -- Accuracy:} maximise closed-set identification accuracy and macro-averaged F1 over the 60 enrolled users.
+    \item \textbf{Objective 3 -- Comparability:} evaluate one classical model (Random Forest) and two deep models (BiLSTM, 1D CNN) on \emph{identical} features and \emph{identical} train/test partitions.
+    \item \textbf{Constraint 1 -- Small data:} only 15 typing sessions per user (900 feature vectors in total), so overfitting must be controlled explicitly.
+    \item \textbf{Constraint 2 -- Zero leakage:} no test session may influence training, scaling or model selection.
+    \item \textbf{Constraint 3 -- Closed set:} all test identities are enrolled; impostors outside the cohort are not modelled.
+    \item \textbf{Constraint 4 -- Privacy:} only timing information is used; the content of typed text is not stored as a feature.
+\end{itemize}
+
+\subsection{Overall Pipeline}
+Figure~\ref{fig:pipeline} summarises the end-to-end workflow, from raw keystroke logs to the three classifiers and their evaluation.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  node distance=0.55cm and 0.7cm,
+  box/.style={rectangle, draw, rounded corners, align=center, minimum height=1.0cm, minimum width=2.4cm, font=\small},
+  arr/.style={-{Latex[length=2mm]}, thick}]
+\node[box] (raw) {Raw keystrokes\\(Aalto dataset)};
+\node[box, right=of raw] (clean) {Cleaning\\\& EDA};
+\node[box, right=of clean] (feat) {Feature\\engineering\\(124 features)};
+\node[box, below=of feat] (split) {Session-level\\80/20 split\\+ scaling};
+\node[box, left=of split, xshift=-0.3cm] (rf) {Random\\Forest};
+\node[box, left=of rf] (cnn) {1D CNN};
+\node[box, left=of cnn] (lstm) {BiLSTM};
+\node[box, below=of rf] (eval) {Evaluation:\\Acc., F1, FAR/FRR/EER};
+\draw[arr] (raw)--(clean);
+\draw[arr] (clean)--(feat);
+\draw[arr] (feat)--(split);
+\draw[arr] (split)--(rf);
+\draw[arr] (split) |- ++(0,-0.0) -- (rf);
+\draw[arr] (rf)--(eval);
+\draw[arr] (cnn)--(eval);
+\draw[arr] (lstm)--(eval);
+\end{tikzpicture}
+\caption{Overall methodology pipeline for continuous keystroke authentication.}
+\label{fig:pipeline}
+\end{figure}
+
+\subsection{Experimental Protocol}
+All three models use the same protocol: (i) session-level stratified partitioning of each user's 15 sessions into 12 training and 3 test sessions; (ii) hyper-parameter selection using only the training partition (stratified cross-validation or a held-out validation slice of the training data); (iii) a single final evaluation on the untouched test partition; and (iv) a fixed random seed (42) for reproducibility.
+
+\section{Preliminary Design or Design (Model) Specification}
+\label{sec:design}
+
+Three alternative classifiers were designed. They cover a tree-based ensemble and two neural architectures that exploit different structural assumptions about the feature vector. Each receives the same 124-dimensional session vector $\mathbf{x}\in\mathbb{R}^{124}$ and predicts one of $C=60$ user labels $y\in\{0,\dots,59\}$.
+
+\subsection{Model 1: Random Forest (RF)}
+A Random Forest is an ensemble of $T$ decision trees, each trained on a bootstrap sample of the training set with a random subset of $m$ features considered at every split. The predicted class is the majority vote (equivalently, the arg-max of the averaged class posteriors):
+\begin{equation}
+\hat{y}=\arg\max_{c}\ \frac{1}{T}\sum_{t=1}^{T}\mathbb{1}\left[h_t(\mathbf{x})=c\right].
+\end{equation}
+RF was selected as the baseline because it handles heterogeneous features, is insensitive to monotonic feature scaling, works well on small tabular data, and gives interpretable feature importances that indicate which timing traits (e.g., hold time, specific digraphs) carry the most identity information.
+
+\begin{table}[H]
+\centering
+\caption{Random Forest specification.}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Component} & \textbf{Setting} \\ \midrule
+Input & 124 features (session vector) \\
+Number of trees $T$ & 300 \\
+Split criterion & Gini impurity \\
+Features per split $m$ & $\sqrt{124}\approx 11$ \\
+Max depth & None (trees grown until pure) \\
+Min samples per leaf & 1 \\
+Class weighting & Balanced \\
+Parallelism & All CPU cores (\texttt{n\_jobs=-1}) \\
+Random seed & 42 \\ \bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Model 2: Bidirectional LSTM (BiLSTM)}
+A BiLSTM reads a sequence in both temporal directions and concatenates the forward and backward hidden states, so each position is represented by its left and right context:
+\begin{equation}
+\mathbf{h}_t=\left[\overrightarrow{\mathbf{h}}_t;\overleftarrow{\mathbf{h}}_t\right],\qquad
+\overrightarrow{\mathbf{h}}_t=\mathrm{LSTM}\big(\mathbf{x}_t,\overrightarrow{\mathbf{h}}_{t-1}\big).
+\end{equation}
+Because keystroke dynamics are fundamentally sequential and rhythm-based, a recurrent model is a natural candidate. The 124 features are reshaped into a $(31,4)$ sequence by grouping consecutive features into 31 time steps of 4 channels each, preserving semantic locality (each group contains related timing metrics for the same digraph or feature category). GaussianNoise augmentation ($\sigma=0.05$) is applied at training time to improve generalisation under small-data conditions.
+
+\begin{table}[H]
+\centering
+\caption{Bidirectional LSTM architecture specification.}
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Layer} & \textbf{Configuration} & \textbf{Output shape} \\ \midrule
+Input & GaussianNoise($\sigma=0.05$) & $(31,4)$ \\
+BiLSTM-1 & 64 units/direction, return sequences, rec.\ dropout 0.1 & $(31,128)$ \\
+BatchNorm + Dropout & Dropout 0.3 & $(31,128)$ \\
+BiLSTM-2 & 32 units/direction, return final state, rec.\ dropout 0.1 & $64$ \\
+BatchNorm + Dropout & Dropout 0.3 & $64$ \\
+Dense + BN + Dropout & 128 units, ReLU, $L_2=10^{-3}$, Dropout 0.5 & $128$ \\
+Dense + Dropout & 64 units, ReLU, $L_2=10^{-3}$, Dropout 0.4 & $64$ \\
+Output & Dense(60), softmax & $60$ \\ \bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Model 3: One-Dimensional Convolutional Neural Network (1D CNN)}
+A 1D CNN slides learnable filters over the feature axis and detects local patterns that are reused across positions:
+\begin{equation}
+z_{j}^{(k)}=\sigma\!\left(\sum_{i=0}^{K-1} w_{i}^{(k)}\,x_{j+i}+b^{(k)}\right),
+\end{equation}
+where $K$ is the kernel size, $w^{(k)}$ the $k$-th filter and $\sigma$ the activation. The 124 features are ordered in groups (global statistics first, then the four metrics of each digraph consecutively) so that neighbouring positions are semantically related, which is what makes local convolutions meaningful on a tabular vector. The model uses slim filter counts (32$\to$64) to keep the total parameter count under 100K, avoiding overfitting on the 612-sample training partition.
+
+\begin{table}[H]
+\centering
+\caption{1D CNN architecture specification.}
+\begin{tabular}{@{}lll@{}}
+\toprule
+\textbf{Layer} & \textbf{Configuration} & \textbf{Output shape} \\ \midrule
+Input & GaussianNoise($\sigma=0.05$) & $(124,1)$ \\
+Conv1D + BN + ReLU & 32 filters, kernel 5, padding same & $(124,32)$ \\
+MaxPooling1D + Dropout & pool 2, Dropout 0.3 & $(62,32)$ \\
+Conv1D + BN + ReLU & 64 filters, kernel 3, padding same & $(62,64)$ \\
+MaxPooling1D + Dropout & pool 2, Dropout 0.3 & $(31,64)$ \\
+Global average pooling & -- & $64$ \\
+Dense + BN + Dropout & 128 units, ReLU, $L_2=10^{-3}$, Dropout 0.5 & $128$ \\
+Dense + Dropout & 64 units, ReLU, $L_2=10^{-3}$, Dropout 0.4 & $64$ \\
+Output & Dense(60), softmax & $60$ \\ \bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Comparison of Alternative Designs}
+\begin{table}[H]
+\centering
+\caption{Design comparison of the three candidate models.}
+\begin{tabular}{@{}p{3.1cm}p{3.6cm}p{3.6cm}p{3.6cm}@{}}
+\toprule
+\textbf{Aspect} & \textbf{Random Forest} & \textbf{BiLSTM} & \textbf{1D CNN} \\ \midrule
+Model family & Bagged decision trees & Recurrent network & Convolutional network \\
+Input form & Flat vector (124) & Sequence $(31\times4)$ & Ordered vector $(124\times1)$ \\
+Needs scaling & No (used scaled for uniformity) & Yes & Yes \\
+Captures & Feature interactions & Sequential/rhythmic context & Local feature patterns \\
+Interpretability & High (importances) & Low & Low \\
+Training cost & Low & High & Medium \\
+Overfitting risk (small data) & Low--medium & High & Medium--high \\ \bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Simulation and Verification of the Designs}
+Each design was verified by simulation on the held-out partition: predicted identities are compared with ground-truth labels to obtain accuracy, macro precision/recall/F1 and the confusion matrix. For the Zero Trust verification view, the softmax (or forest) posterior for the \emph{claimed} identity is treated as a trust score $s\in[0,1]$; a session is accepted when $s\ge\tau$. Sweeping $\tau$ yields the False Acceptance Rate (FAR), False Rejection Rate (FRR) and Equal Error Rate (EER):
+\begin{equation}
+\mathrm{FAR}(\tau)=\frac{\#\text{impostor scores}\ge\tau}{\#\text{impostor trials}},\quad
+\mathrm{FRR}(\tau)=\frac{\#\text{genuine scores}<\tau}{\#\text{genuine trials}},\quad
+\mathrm{EER}=\mathrm{FAR}(\tau^\ast)=\mathrm{FRR}(\tau^\ast).
+\end{equation}
+
+\section{Data Collection}
+\label{sec:data_collection}
+
+\subsection*{Source}
+The data originates from the Aalto University ``136 Million Keystrokes'' dataset, a large-scale corpus in which volunteers typed short English sentences in a web-based test while press and release timestamps of every key were logged. Each record contains the participant identifier, test-section (sentence) identifier, keystroke identifier, key code, typed character, press time, release time, and demographic metadata (age, gender, country, native language, keyboard type, typing-course history).
+
+\subsection*{Cohort Selection}
+From the full corpus, a cohort of \textbf{60 participants} was selected, each with at least 15 completed typing sessions. The first 15 sessions of each participant were retained, giving a balanced design of $60\times15=900$ typing sessions. The merged raw telemetry contains \textbf{42{,}939} keystroke events. The ingestion pipeline (\texttt{inspect\_and\_merge.py}) verified field layout, joined keystroke logs with participant metadata, and stored the result in CSV and Parquet formats.
+
+\subsection{Data Cleaning}
+\label{subsec:cleaning}
+Cleaning was implemented in \texttt{clean\_and\_eda.py} and comprised the following steps.
+
+\begin{itemize}
+    \item \textbf{Missing values:} 4{,}416 missing \texttt{LETTER} entries (10.28\%) with key code 32 were restored as the space character; any residual missing letters were labelled \texttt{UNKNOWN} to preserve event continuity; missing demographic fields (gender, country, native language, keyboard type) were set to \texttt{Unknown}.
+    \item \textbf{Duplicates:} identical events, identified by the key $(\text{PARTICIPANT\_ID},\text{TEST\_SECTION\_ID},\text{KEYSTROKE\_ID})$, were checked---zero duplicate records were found, confirming unique telemetry per session.
+    \item \textbf{Type correction and ordering:} identifier and key-code fields were cast to integers, timestamps to numeric values, and events were sorted chronologically by participant, section, press time and keystroke ID.
+    \item \textbf{Physical-validity filtering (outliers):} 3 events with hold time $HT\le 0$ ms (release before or at press, caused by clock jitter) and 7 events with $HT>3{,}000$ ms (stuck keys or timer artefacts) were removed as sensor corruption---a total of 10 rows dropped.
+    \item \textbf{Behavioural anomalies flagged, not deleted:} 17 inter-key gaps $DD>5{,}000$ ms were flagged as cognitive pauses (\texttt{IS\_LONG\_PAUSE}), and 11{,}166 negative flight times $UD<0$ were flagged as key rollover (\texttt{IS\_ROLLOVER}). Both are genuine behavioural signals rather than errors, so they were kept.
+\end{itemize}
+
+After cleaning, \textbf{42{,}929} events remained, a retention rate of \textbf{99.98\%}. Timing variables were derived per keystroke as
+\begin{equation}
+HT_n=R_n-P_n,\qquad UD_n=P_n-R_{n-1},\qquad DD_n=P_n-P_{n-1},
+\end{equation}
+where $P_n$ and $R_n$ are the press and release times of the $n$-th key. Consequently $DD_n=UD_n+HT_{n-1}$.
+
+\subsection{Data Transformation}
+\label{subsec:transformation}
+\begin{itemize}
+    \item \textbf{Aggregation to session level:} the event stream was transformed into one feature vector per typing session (Section~\ref{subsec:reduction}), so each of the 900 sessions is one sample.
+    \item \textbf{Character normalisation:} key symbols were mapped to a canonical form (\texttt{SPACE}, \texttt{BKSP}, \texttt{SHIFT}, lowercase letters, \texttt{KEY\_$k$} for unnamed codes) before digraph construction.
+    \item \textbf{Label encoding:} participant IDs were mapped to integer classes $0,\dots,59$ using \texttt{LabelEncoder}.
+    \item \textbf{Standardisation:} features were $z$-scored, $z=(x-\mu)/\sigma$, with a \texttt{StandardScaler} fitted \emph{only} on the 720 training rows and then applied to the 180 test rows, preventing leakage.
+    \item \textbf{Model-specific reshaping:} Random Forest uses the flat vector $\mathbf{x}\in\mathbb{R}^{124}$; the 1D CNN reshapes it to $(124,1)$; the BiLSTM reshapes the 124 features to $(31,4)$ by grouping every four consecutive features as one time step. One-hot (categorical) targets are used for the neural networks.
+\end{itemize}
+
+\subsection{Data Integration}
+\label{subsec:integration}
+Three sources were combined: (i) the per-participant keystroke logs, (ii) participant metadata (demographics and typing background), and (iii) the test-section/sentence information (prompt \texttt{SENTENCE} and typed \texttt{USER\_INPUT}). They were joined on \texttt{PARTICIPANT\_ID} and \texttt{TEST\_SECTION\_ID} during the merge stage and later aggregated into the session-level feature table. Demographic attributes were retained for exploratory analysis only and were \emph{not} used as model inputs, so that classification relies purely on behavioural timing.
+
+\subsection{Data Reduction}
+\label{subsec:reduction}
+Instead of using all possible character pairs, dimensionality was reduced to a compact, interpretable set of \textbf{124 features}:
+
+\begin{table}[H]
+\centering
+\caption{Engineered feature groups.}
+\begin{tabular}{@{}lcp{8.3cm}@{}}
+\toprule
+\textbf{Group} & \textbf{Count} & \textbf{Description} \\ \midrule
+Global timing statistics & 12 & Mean, standard deviation, median and IQR of $HT$, $UD$ and $DD$ \\
+Cadence and speed & 7 & Total keystrokes, duration, keys/s, WPM, rollover rate, long-pause count and rate \\
+Error and correction & 5 & Backspace count/rate, shift count/rate, edit-length difference \\
+Top-25 digraph features & 100 & Count, mean $UD$, mean $DD$, mean $HT$ for each of the 25 most frequent digraphs \\ \midrule
+\textbf{Total} & \textbf{124} & \\ \bottomrule
+\end{tabular}
+\end{table}
+
+The 25 digraphs were the most frequent transitions across the cohort (e.g., \texttt{t\_h}, \texttt{h\_e}, \texttt{e\_SPACE}, \texttt{i\_n}). For sessions where a digraph did not occur, a \textbf{two-tier imputation} was used: the participant's own mean for that digraph (Tier~1), otherwise the cohort median (Tier~2); count features were set to 0 when absent. Long-pause intervals were excluded when computing global $UD$/$DD$ statistics so that thinking pauses do not dominate typing-rhythm estimates.
+
+\subsection{Summary of Preprocessed Data}
+\label{subsec:summary}
+\begin{table}[H]
+\centering
+\caption{Final dataset used for model design and evaluation.}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Property} & \textbf{Value} \\ \midrule
+Raw keystroke events (merged) & 42{,}939 \\
+Cleaned events & 42{,}929 (99.98\% retained) \\
+Participants (classes) & 60 \\
+Sessions per participant & 15 \\
+Total samples (sessions) & 900 \\
+Features per sample & 124 (numeric, no missing values) \\
+Training set & 720 samples (12 sessions/user) \\
+Test set & 180 samples (3 sessions/user) \\
+Scaling & StandardScaler fitted on training set only \\
+Train/test session overlap & 0 \\ \bottomrule
+\end{tabular}
+\end{table}
+
+\section{Implementation of Selected Design}
+\label{sec:implementation}
+
+All experiments were implemented in Python 3.12 using \texttt{pandas}, \texttt{numpy}, \texttt{scikit-learn} (preprocessing, Random Forest and metrics) and \texttt{TensorFlow/Keras} (BiLSTM and 1D CNN). The preprocessing pipeline is executed by three scripts: \texttt{inspect\_and\_merge.py}, \texttt{clean\_and\_eda.py} and \texttt{feature\_engineering\_and\_preprocessing.py}; the resulting files (\texttt{train\_scaled.csv}, \texttt{test\_scaled.csv}, \texttt{label\_encoder.joblib}, \texttt{scaler.joblib}) are the common input of all three models.
+
+\subsection{Data Loading}
+\begin{lstlisting}[language=Python]
+import pandas as pd, numpy as np
+d = "03_feature_engineering_preprocessing/"
+tr = pd.read_csv(d + "train_scaled.csv")
+te = pd.read_csv(d + "test_scaled.csv")
+ids = ["PARTICIPANT_ID", "TEST_SECTION_ID", "label"]
+feats = [c for c in tr.columns if c not in ids]      # 124 features
+X_train, y_train = tr[feats].values, tr["label"].values
+X_test,  y_test  = te[feats].values, te["label"].values
+\end{lstlisting}
+
+\subsection{Random Forest Implementation}
+The forest was trained with scikit-learn using 300 estimators with balanced class weighting. Trees were grown to full depth (no maximum depth constraint) to exploit the already small feature space, and all available CPU cores were utilised for parallel tree construction.
+\begin{lstlisting}[language=Python]
+from sklearn.ensemble import RandomForestClassifier
+
+rf = RandomForestClassifier(
+    n_estimators=300,
+    random_state=42,
+    n_jobs=-1,
+    class_weight='balanced',
+    max_depth=None,
+)
+rf.fit(X_train, y_train)
+y_pred = rf.predict(X_test)
+\end{lstlisting}
+Feature importances (mean decrease in impurity) were extracted from \texttt{rf.feature\_importances\_} to identify the most discriminative timing traits.
+
+\subsection{1D CNN Implementation}
+The 1D CNN was built using Keras Sequential API with a slim architecture designed for the small 720-sample training set. A stratified 85/15 split of the training data provided a dedicated validation partition containing all 60 classes.
+\begin{lstlisting}[language=Python]
+import tensorflow as tf
+from tensorflow.keras import layers, callbacks, regularizers
+
+model = keras.Sequential([
+    layers.GaussianNoise(0.05, input_shape=(124, 1)),
+    layers.Conv1D(32, 5, activation='relu', padding='same'),
+    layers.BatchNormalization(),
+    layers.MaxPooling1D(2), layers.Dropout(0.3),
+    layers.Conv1D(64, 3, activation='relu', padding='same'),
+    layers.BatchNormalization(),
+    layers.MaxPooling1D(2), layers.Dropout(0.3),
+    layers.GlobalAveragePooling1D(),
+    layers.Dense(128, activation='relu',
+                 kernel_regularizer=regularizers.l2(1e-3)),
+    layers.BatchNormalization(), layers.Dropout(0.5),
+    layers.Dense(64, activation='relu',
+                 kernel_regularizer=regularizers.l2(1e-3)),
+    layers.Dropout(0.4),
+    layers.Dense(60, activation='softmax'),
+])
+model.compile(optimizer=keras.optimizers.Adam(1e-3),
+              loss='categorical_crossentropy', metrics=['accuracy'])
+\end{lstlisting}
+
+\subsection{BiLSTM Implementation}
+The BiLSTM model was also built as a Keras Sequential stack. The 124-dimensional feature vector is reshaped into $(31,4)$---31 time steps of 4 channels---to provide the recurrent layers with a meaningful temporal sequence. Two stacked bidirectional LSTM layers with recurrent dropout extract forward and backward dependencies before a dense classification head.
+\begin{lstlisting}[language=Python]
+model = keras.Sequential([
+    layers.GaussianNoise(0.05, input_shape=(31, 4)),
+    layers.Bidirectional(layers.LSTM(64, return_sequences=True,
+                                     recurrent_dropout=0.1)),
+    layers.BatchNormalization(), layers.Dropout(0.3),
+    layers.Bidirectional(layers.LSTM(32, return_sequences=False,
+                                     recurrent_dropout=0.1)),
+    layers.BatchNormalization(), layers.Dropout(0.3),
+    layers.Dense(128, activation='relu',
+                 kernel_regularizer=regularizers.l2(1e-3)),
+    layers.BatchNormalization(), layers.Dropout(0.5),
+    layers.Dense(64, activation='relu',
+                 kernel_regularizer=regularizers.l2(1e-3)),
+    layers.Dropout(0.4),
+    layers.Dense(60, activation='softmax'),
+])
+model.compile(optimizer=keras.optimizers.Adam(1e-3),
+              loss='categorical_crossentropy', metrics=['accuracy'])
+\end{lstlisting}
+
+\subsection{Training Configuration}
+\begin{table}[H]
+\centering
+\caption{Common training settings for the neural models.}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Setting} & \textbf{Value} \\ \midrule
+Optimiser & Adam, initial learning rate $10^{-3}$ \\
+Loss & Categorical cross-entropy (one-hot targets) \\
+Batch size & 32 \\
+Maximum epochs & 150 \\
+Validation split & 15\% of training data (stratified, 60 classes preserved) \\
+Input augmentation & GaussianNoise ($\sigma=0.05$, training only) \\
+Regularisation & Dropout 0.3--0.5, batch normalisation, $L_2=10^{-3}$ on Dense layers \\
+Early stopping & Monitor \texttt{val\_accuracy}, patience 20, restore best weights \\
+LR scheduler & ReduceLROnPlateau (factor 0.5, patience 8, min $10^{-6}$) \\
+Random seed & 42 (Python, NumPy, TensorFlow) \\ \bottomrule
+\end{tabular}
+\end{table}
+
+The 1D CNN trained for 88 epochs before early stopping (best validation accuracy 68.52\% at epoch 68). The BiLSTM trained for 108 epochs (best validation accuracy 87.96\% at epoch 88).
+
+\subsection{Evaluation Procedure}
+Every trained model is evaluated once on the 180 test sessions. The reported metrics are accuracy, macro-averaged precision, recall and F1, the confusion matrix, and the FAR/FRR/EER derived from the claimed-identity posterior (Section~\ref{sec:design}).
+\begin{lstlisting}[language=Python]
+from sklearn.metrics import (accuracy_score,
+    precision_recall_fscore_support, confusion_matrix)
+
+def evaluate(y_true, y_pred):
+    p, r, f, _ = precision_recall_fscore_support(
+        y_true, y_pred, average="macro", zero_division=0)
+    return dict(acc=accuracy_score(y_true, y_pred),
+                prec=p, rec=r, f1=f)
+\end{lstlisting}
+
+\subsection{Deployment View under Zero Trust}
+In deployment, the keystroke stream of an active session is segmented into windows, converted to the same 124 features using the saved \texttt{scaler.joblib}, and scored by the selected model. The posterior of the claimed identity forms a rolling trust score. When the score falls below the threshold $\tau$ chosen at the EER (or a stricter operating point), the ZTA policy engine can trigger step-up authentication or session termination, providing continuous rather than one-time verification.
+
+\section{Results and Analysis}
+\label{sec:results}
+
+This section presents the experimental outcomes of the three trained models evaluated on the identical held-out test set of 180 sessions (3 sessions $\times$ 60 participants).
+
+\subsection{Random Forest Results}
+The Random Forest classifier achieved near-perfect identification performance on the test set, correctly classifying 179 out of 180 sessions.
+
+\begin{table}[H]
+\centering
+\caption{Random Forest test-set performance (180 sessions, 60 classes).}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Metric} & \textbf{Value} \\ \midrule
+Accuracy & 99.44\% (179/180 correct) \\
+Macro Precision & 0.9958 \\
+Macro Recall & 0.9944 \\
+Macro F1-Score & 0.9943 \\
+Weighted F1-Score & 0.9943 \\ \bottomrule
+\end{tabular}
+\end{table}
+
+Of the 60 participants, 58 were classified with perfect precision and recall (1.00). Only one misclassification occurred: one session of participant 100381 was incorrectly attributed to participant 100188, reducing participant 100381's recall to 0.67 and participant 100188's precision to 0.75. This indicates that these two typists exhibit similar digraph timing signatures for certain sentences, yet the forest still distinguishes them in two out of three test sessions.
+
+\subsubsection{Feature Importance Analysis}
+The top-10 most discriminative features, ranked by mean decrease in impurity (Gini importance), are listed in Table~\ref{tab:rf_importances}. All ten are digraph-level timing features, confirming that inter-key transition latencies carry the strongest identity signal.
+
+\begin{table}[H]
+\centering
+\caption{Top-10 Random Forest feature importances.}
+\label{tab:rf_importances}
+\begin{tabular}{@{}clc@{}}
+\toprule
+\textbf{Rank} & \textbf{Feature} & \textbf{Importance} \\ \midrule
+1 & \texttt{dg\_y\_SPACE\_mean\_UD} & 0.0257 \\
+2 & \texttt{dg\_o\_SPACE\_mean\_UD} & 0.0243 \\
+3 & \texttt{dg\_o\_SPACE\_mean\_DD} & 0.0240 \\
+4 & \texttt{dg\_o\_n\_mean\_UD} & 0.0224 \\
+5 & \texttt{dg\_BKSP\_BKSP\_mean\_HT} & 0.0222 \\
+6 & \texttt{dg\_o\_n\_mean\_DD} & 0.0213 \\
+7 & \texttt{dg\_o\_SPACE\_mean\_HT} & 0.0210 \\
+8 & \texttt{dg\_y\_SPACE\_mean\_DD} & 0.0209 \\
+9 & \texttt{dg\_r\_SPACE\_mean\_HT} & 0.0204 \\
+10 & \texttt{dg\_BKSP\_BKSP\_mean\_UD} & 0.0203 \\ \bottomrule
+\end{tabular}
+\end{table}
+
+Notably, the transition from a character to the \texttt{SPACE} key (word boundaries) and the double-backspace correction pattern emerge as particularly distinctive biometric markers. The feature \texttt{dg\_y\_SPACE\_mean\_UD}---the average up-down latency between pressing ``y'' and then the space bar---is the single most informative feature, suggesting that word-ending motor patterns are highly individualistic.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{figures/Random_Forest_confusion_matrix.png}
+\caption{Random Forest confusion matrix ($60\times 60$). The near-perfect diagonal confirms that 179 of 180 test sessions were correctly identified.}
+\label{fig:rf_cm}
+\end{figure}
+
+\subsection{Bidirectional LSTM Results}
+The BiLSTM model achieved the second-highest test accuracy, correctly classifying 156 out of 180 sessions after training for 108 epochs with early stopping restoring the best weights from epoch 88.
+
+\begin{table}[H]
+\centering
+\caption{BiLSTM test-set performance (180 sessions, 60 classes).}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Metric} & \textbf{Value} \\ \midrule
+Accuracy & 86.67\% (156/180 correct) \\
+Macro Precision & 0.8928 \\
+Macro Recall & 0.8667 \\
+Macro F1-Score & 0.8599 \\
+Weighted F1-Score & 0.8599 \\
+Best validation accuracy & 87.96\% (epoch 88) \\ \bottomrule
+\end{tabular}
+\end{table}
+
+The BiLSTM outperforms the 1D CNN by approximately 21 percentage points in accuracy, demonstrating that the recurrent architecture's ability to model forward and backward dependencies across the $(31,4)$ feature sequence provides a meaningful advantage. However, with only 12 training sessions per class (approximately 10 after the 15\% validation split), the model lacks sufficient sequential data to fully learn the temporal typing patterns of each user.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{figures/LSTM_confusion_matrix.png}
+\caption{BiLSTM confusion matrix ($60\times 60$). The diagonal is dominant, though off-diagonal entries indicate confusion among participants with similar rhythmic profiles.}
+\label{fig:lstm_cm}
+\end{figure}
+
+\subsection{1D CNN Results}
+The 1D CNN model achieved the lowest test accuracy of the three architectures, correctly classifying 118 out of 180 sessions after training for 88 epochs with early stopping.
+
+\begin{table}[H]
+\centering
+\caption{1D CNN test-set performance (180 sessions, 60 classes).}
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Metric} & \textbf{Value} \\ \midrule
+Accuracy & 65.56\% (118/180 correct) \\
+Macro Precision & 0.6457 \\
+Macro Recall & 0.6556 \\
+Macro F1-Score & 0.6120 \\
+Weighted F1-Score & 0.6120 \\
+Best validation accuracy & 68.52\% (epoch 68) \\ \bottomrule
+\end{tabular}
+\end{table}
+
+Although 65.56\% accuracy significantly exceeds the random-chance baseline of 1.67\% for a 60-class problem (by $\approx 39\times$), it falls well below the Random Forest and BiLSTM. The slim convolutional architecture appears to struggle with the heterogeneous, non-stationary nature of the feature vector: global statistics (indices 0--23) have fundamentally different statistical properties from digraph metrics (indices 24--123), and a uniform 1D convolution may not adapt well to this shift.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{figures/1D_CNN_confusion_matrix.png}
+\caption{1D CNN confusion matrix ($60\times 60$). More dispersed off-diagonal entries are visible compared to the RF and BiLSTM matrices.}
+\label{fig:cnn_cm}
+\end{figure}
+
+\subsection{Consolidated Model Comparison}
+
+\begin{table}[H]
+\centering
+\caption{Consolidated performance comparison across the three models.}
+\label{tab:comparison}
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Metric} & \textbf{Random Forest} & \textbf{BiLSTM} & \textbf{1D CNN} \\ \midrule
+Accuracy (\%) & \textbf{99.44} & 86.67 & 65.56 \\
+Macro Precision & \textbf{0.9958} & 0.8928 & 0.6457 \\
+Macro Recall & \textbf{0.9944} & 0.8667 & 0.6556 \\
+Macro F1-Score & \textbf{0.9943} & 0.8599 & 0.6120 \\
+Weighted F1-Score & \textbf{0.9943} & 0.8599 & 0.6120 \\
+Correct / Total & 179/180 & 156/180 & 118/180 \\ \bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Discussion}
+
+The results reveal a clear hierarchy: Random Forest $\gg$ BiLSTM $>$ 1D CNN. Several factors explain this ordering.
+
+\paragraph{Why Random Forest dominates.}
+Random Forest achieves 99.44\% accuracy because its architecture is inherently suited to this problem setting: (i)~the 124 features are well-engineered, domain-specific biometric descriptors that directly encode the most discriminative typing patterns; (ii)~300 bagged trees effectively capture complex, non-linear feature interactions without the risk of gradient-based overfitting; (iii)~trees are insensitive to feature scaling and do not require the ordered/sequential assumptions that neural models impose; and (iv)~the ensemble's built-in bootstrap aggregation provides robust generalisation even with only 12 training samples per class.
+
+\paragraph{BiLSTM as a competitive deep model.}
+The BiLSTM's 86.67\% accuracy demonstrates that sequential modelling of the $(31,4)$ feature arrangement captures meaningful rhythmic structure. The bidirectional architecture allows the model to correlate early-sequence features (global timing statistics) with late-sequence features (digraph metrics), which a unidirectional model would miss. The performance gap relative to RF is primarily attributable to the small training set: with only $\sim$10 effective training samples per class (after the validation split), the recurrent model has insufficient data to learn the full parameter space reliably, despite regularisation (dropout, batch normalisation, $L_2$, Gaussian noise, learning rate reduction).
+
+\paragraph{1D CNN limitations.}
+The 1D CNN's lower performance (65.56\%) reflects the mismatch between fixed-width convolutional kernels and the heterogeneous feature vector. Unlike natural sequences (speech, time series) where local patterns repeat at multiple positions, the 124-feature vector has structurally different regions (global statistics vs.\ digraph metrics). The convolutions treat the entire vector as a uniform 1D signal, losing the semantic grouping that both RF (via random feature splits) and BiLSTM (via temporal gating) can exploit.
+
+\paragraph{Implications for Zero Trust deployment.}
+The Random Forest's near-perfect accuracy makes it the recommended model for the ZTA continuous authentication module. With only one misclassification out of 180 test sessions, the system can maintain high trust scores for legitimate users while rapidly detecting identity changes. The model's low computational cost (inference requires only tree traversal, no matrix multiplications) also suits the real-time, continuous evaluation requirements of the Zero Trust framework. The BiLSTM remains a viable alternative for deployment scenarios where GPU acceleration is available and larger training corpora can be collected, as its sequential modelling could become advantageous with more data.
