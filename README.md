@@ -110,9 +110,15 @@ All models were evaluated on the held-out **180 test sessions** (3 sessions per 
 ## 🚀 Setup & Execution
 
 ### Option A: Run in Google Colab (Recommended)
-Click the badge below to run the complete pipeline with GPU acceleration directly in your browser:
+Click the badge below to run the complete end-to-end pipeline (Data Ingestion ➔ Cleaning & EDA ➔ 124-Feature Preprocessing ➔ Multi-Model Training & Benchmarking) with free GPU acceleration directly in your browser:
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/itsrashedsatter/thesis-on-keystroke-dynamics-authentication/blob/main/keystroke_dynamics_pipeline.ipynb)
+
+The Colab notebook executes all 4 stages:
+1. **Stage 01**: Ingestion & Cohort Verification (42,929 keystrokes from 60 typists).
+2. **Stage 02**: Data Cleaning & EDA with all 4 high-res visualization figures rendered inline.
+3. **Stage 03**: Feature Engineering & Preprocessing (124 biometrics, Top-25 digraphs, stratified split).
+4. **Stage 04**: Model Training & Benchmarking (Random Forest, 1D-CNN, BiLSTM, and consolidated comparative performance chart).
 
 ### Option B: Local Execution
 

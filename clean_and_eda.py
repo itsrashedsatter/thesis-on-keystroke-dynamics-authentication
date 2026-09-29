@@ -121,7 +121,7 @@ def run_clean_and_eda():
     df_cleaned['IS_ROLLOVER'] = ((df_cleaned['UD_TIME'] < 0) & (df_cleaned['IS_FIRST_KEY'] == 0)).astype(int)
     num_rollovers = df_cleaned['IS_ROLLOVER'].sum()
     
-    cleaning_log_entries.append(f"""### Physical Validity & Anomaly Handling
+    cleaning_log_entries.append(fr"""### Physical Validity & Anomaly Handling
 - **Negative / Zero Hold Times Dropped ($HT \le 0$)**: `{num_invalid_hold:,}` rows.
   - *Reasoning*: A key release timestamp occurring at or before its press timestamp represents hardware driver clock jitter or timer desynchronization.
 - **Extreme Hold Time Artifacts Dropped ($HT > 3,000$ ms)**: `{num_corrupted_hold:,}` rows.
