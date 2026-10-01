@@ -1,10 +1,7 @@
 # ============================================================
-# requirements_stage04.txt — Stage 04 Model Training Dependencies
+# requirements_stage04.txt — Model Training Dependencies (1k Cohort)
 # ============================================================
 # Install: pip install -r requirements_stage04.txt
-#
-# For GPU support on Google Colab, TensorFlow GPU is pre-installed.
-# Locally, install tensorflow-gpu if a CUDA-compatible GPU is available.
 # ============================================================
 
 # Core Data & ML

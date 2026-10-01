@@ -1,0 +1,17 @@
+{
+  "model_name": "Random_Forest",
+  "total_test_samples": 3000,
+  "total_train_samples": 12000,
+  "num_classes": 1000,
+  "correct_predictions": 2910,
+  "accuracy": 0.97,
+  "test_accuracy": 0.97,
+  "precision_macro": 0.975267,
+  "recall_macro": 0.97,
+  "f1_macro": 0.968656,
+  "macro_f1": 0.968656,
+  "precision_weighted": 0.975267,
+  "recall_weighted": 0.97,
+  "f1_weighted": 0.968656,
+  "weighted_f1": 0.968656
+}

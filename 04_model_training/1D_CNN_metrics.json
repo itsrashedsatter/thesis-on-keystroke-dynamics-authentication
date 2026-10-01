@@ -1,0 +1,17 @@
+{
+  "model_name": "1D_CNN",
+  "total_test_samples": 3000,
+  "total_train_samples": 12000,
+  "num_classes": 1000,
+  "correct_predictions": 1472,
+  "accuracy": 0.490667,
+  "test_accuracy": 0.490667,
+  "precision_macro": 0.504089,
+  "recall_macro": 0.490667,
+  "f1_macro": 0.460557,
+  "macro_f1": 0.460557,
+  "precision_weighted": 0.504089,
+  "recall_weighted": 0.490667,
+  "f1_weighted": 0.460557,
+  "weighted_f1": 0.460557
+}
