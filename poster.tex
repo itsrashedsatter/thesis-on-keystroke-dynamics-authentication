@@ -1,0 +1,236 @@
+% Unofficial University of Lethbridge Poster template.
+\documentclass[final]{beamer}
+
+% ====================
+% Packages
+% ====================
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage[size=custom, width=122,height=91, scale=1.1]{beamerposter}
+\usetheme{gemini}
+\usecolortheme{msu}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning}
+\usepackage{anyfontsize}
+\usepackage{amsmath, amssymb}
+
+% ====================
+% Lengths
+% ====================
+
+\newlength{\sepwidth}
+\newlength{\colwidth}
+\setlength{\sepwidth}{0.025\paperwidth}
+\setlength{\colwidth}{0.3\paperwidth}
+
+\newcommand{\separatorcolumn}{\begin{column}{\sepwidth}\end{column}}
+
+% ====================
+% Title
+% ====================
+
+\title{Continuous Identity-Verification Mechanism Based on Keystroke Dynamics for Zero Trust Architecture}
+
+\author{Presented by: Mohammad Asif Al Mahfuz (24101661), Rashed Satter (24241101), Sayma Shahid (24241083), Joyeta Jaglul (22201080)}
+
+\institute[shortinst]{BRAC University}
+
+% ====================
+% Footer (optional)
+% ====================
+
+\footercontent{
+  \href{https://github.com/itsrashedsatter/thesis-on-keystroke-dynamics-authentication}{https://github.com/itsrashedsatter} \hfill
+  BRAC University \textbar{} Kha 224 Pragati Sarani, Merul Badda, Dhaka 1212 \hfill
+  \repository{© 2026 BRAC University. All rights reserved.}
+}
+
+% ====================
+% Body
+% ====================
+
+\begin{document}
+
+\begin{frame}[t]
+\begin{columns}[t]
+\separatorcolumn
+
+% ----------------------------------------------------
+% COLUMN 1
+% ----------------------------------------------------
+\begin{column}{\colwidth}
+
+  \begin{block}{Abstract}
+    This thesis examines the feasibility and implementation of a passive, continuous identity-verification mechanism based on keystroke dynamics to align user authentication with the \emph{never trust, always verify} principle of Zero Trust Architecture (ZTA). Rather than authenticating a user only once at login, the system repeatedly evaluates fine-grained typing rhythms in the background. We formulate the problem as a closed-set verification task across \textbf{1{,}000 enrolled typists} using the Aalto University dataset, comprising \textbf{730{,}950 valid keystroke events} across \textbf{15{,}000 typing sessions}. We deployed and evaluated classical machine learning (Random Forest) against deep learning architectures (BiLSTM and 1D CNN) using 124 engineered timing features. Our results demonstrate that the \textbf{Random Forest model achieves a peak accuracy of 97.00\%} ($970\times$ over random chance) and an Equal Error Rate (\textbf{EER}) of \textbf{2.87\%}, proving to be a highly effective, computationally lightweight solution for continuous, non-intrusive enterprise authentication.
+  \end{block}
+
+  \begin{block}{Introduction}
+    The cybersecurity landscape is rapidly shifting away from perimeter-based defenses toward \textbf{Zero Trust Architecture (NIST SP 800-207)}. Traditional single-point authentication models are fundamentally insufficient; if a session is hijacked or a device is left unlocked after login, the system remains completely vulnerable to unauthorized access and insider threats.
+    
+    \vspace{0.3em}
+    \textbf{Keystroke dynamics} offers a non-intrusive behavioral biometric solution. By analyzing typing rhythms—specifically Hold Time ($HT$), Up-Down ($UD$), and Down-Down ($DD$) latencies—we establish an individualized behavioral signature for each user. This research investigates machine learning algorithms to accurately verify user identity using short typing sessions, ensuring rapid detection of anomalies without disrupting user workflows or requiring specialized biometric hardware.
+  \end{block}
+
+  \begin{block}{Problem Statement}
+    While behavioral biometrics are promising, implementing them robustly at enterprise scale introduces significant engineering and machine learning challenges:
+    \begin{itemize}
+      \item \textbf{Extreme Class Scaling:} Scaling from small cohorts ($C=60$) to \textbf{$C=1{,}000$ typists} causes the random-chance baseline to collapse to \textbf{0.10\%}, creating dense, highly complex decision boundaries.
+      \item \textbf{Data Scarcity \& Zero Leakage:} Real-world continuous monitoring relies on short typing bursts (only 15 sessions per typist). Data partitioning must strictly prevent cross-session temporal leakage.
+      \item \textbf{Strict Textual Privacy:} To ensure compliance and prevent keylogging risks, \textbf{zero text content} is recorded; only inter-key temporal latencies are analyzed.
+    \end{itemize}
+  \end{block}
+
+  \begin{block}{Research Objectives}
+    Our goal is to determine the most effective machine learning architecture for continuous keystroke-based authentication under strict data and privacy constraints:
+    \begin{enumerate}
+      \item \textbf{Develop a Continuous Mechanism:} Create a passive identity-verification pipeline that requires absolutely no explicit user interaction post-login.
+      \item \textbf{Maximize Accuracy at Scale:} Achieve state-of-the-art closed-set identification accuracy and biometric security across 1,000 enrolled typists using 15 sessions per user.
+      \item \textbf{Comparative Model Analysis:} Systematically compare tabular ensemble methods (Random Forest) against sequential deep learning networks (BiLSTM, 1D CNN) using an identical 124-feature space.
+      \item \textbf{Ensure Absolute Privacy:} Strictly utilize temporal latencies to guarantee zero exposure of user input content.
+    \end{enumerate}
+  \end{block}
+
+\end{column}
+
+\separatorcolumn
+
+% ----------------------------------------------------
+% COLUMN 2
+% ----------------------------------------------------
+\begin{column}{\colwidth}
+
+  \begin{block}{Literature Review}
+    \textbf{Zero Trust \& Continuous Biometrics:} NIST SP 800-207 mandates ongoing identity verification. Behavioral biometrics like keystroke dynamics enable frictionless background risk assessment without physical interaction.\\
+    \textbf{The Research Gap:} Prior studies divide between classical classifiers (Ali et al.) on fixed text and deep sequential networks (Stragapede et al.) on free text. However, deep models often overfit on sparse, short typing bursts. This thesis examines whether deep networks retain an advantage over tree ensembles when scaled to \textbf{1{,}000 typists} on session-aggregated tabular features.
+  \end{block}
+
+  \begin{block}{Methodology}
+    The zero-leakage pipeline cleans telemetry and engineers 124 biometric descriptors:
+    \begin{itemize}
+      \item \textbf{Cleaning (99.96\% retained):} 730{,}950 of 731{,}278 keystrokes retained, filtering rollover artifacts and pauses $>2{,}000$\,ms.
+      \item \textbf{Features (124):} 12 global timing stats, 7 cadence rates, 5 error metrics, and 100 top-25 digraph transition latencies.
+      \item \textbf{Partitioning (80/20):} Stratified 12 train / 3 test sessions per user (12k train / 3k test vectors). Standard scalers fitted strictly on train.
+    \end{itemize}
+
+    \vspace{0.2em}
+    \begin{figure}[H]
+    \centering
+    \begin{tikzpicture}[
+      box/.style={rectangle, draw=blue!80, rounded corners=5pt, align=center,
+                  minimum width=8.8cm, minimum height=1.5cm, font=\small\bfseries, fill=blue!5},
+      arr/.style={->, >=latex, line width=1.5pt, draw=blue!90}
+    ]
+    % Top row (left to right)
+    \node[box] (raw)   at (4.6, 0)    {Raw Keystrokes\\(730{,}950 events)};
+    \node[box] (clean) at (16.8, 0)   {Cleaning \& EDA\\(99.96\% retention)};
+    \node[box] (feat)  at (29.0, 0)   {Feature Extraction\\(124 features)};
+
+    % Bottom row (right to left)
+    \node[box] (split) at (29.0, -3.0) {Session Split\\(12k Train / 3k Test)};
+    \node[box] (model) at (16.8, -3.0) {3 Classifiers\\(RF, BiLSTM, 1D CNN)};
+    \node[box] (eval)  at (4.6, -3.0)  {Evaluation\\(Acc, F1, FAR/EER)};
+
+    % Clean non-crossing directional connections
+    \draw[arr] (raw.east)   -- (clean.west);
+    \draw[arr] (clean.east) -- (feat.west);
+    \draw[arr] (feat.south) -- (split.north);
+    \draw[arr] (split.west) -- (model.east);
+    \draw[arr] (model.west) -- (eval.east);
+    \end{tikzpicture}
+    \caption{End-to-End Evaluation Pipeline for 1{,}000-User Keystroke Authentication}
+    \end{figure}
+  \end{block}
+
+  \begin{block}{Dataset Details}
+    Evaluated on the publicly available \textbf{Aalto University Keystroke Dataset}:
+    \begin{itemize}
+        \item \textbf{Cohort Scale:} 1,000 enrolled typists (scaled from 60 to evaluate enterprise viability).
+        \item \textbf{Volume \& Sessions:} 730,950 valid keystrokes across 15,000 sessions (12k train / 3k test).
+        \item \textbf{Balanced Priors:} Exactly 15 sessions/user; $0.10\%$ uniform random-chance baseline.
+    \end{itemize}
+  \end{block}
+
+  \begin{block}{Model Architectures}
+    \textbf{1. Random Forest (RF):} 100 depth-bounded trees ($\text{depth}\le 25, \text{leaf}\ge 2$), Gini, $<500$\,MB RAM.\\
+    \textbf{2. BiLSTM:} Mapped to $(31, 4)$; two 64-unit BiLSTM layers, dropout (0.2), Adam, 40 epochs.\\
+    \textbf{3. 1D CNN:} Mapped to $(124, 1)$; Conv1D (32, 64 filters), BatchNorm, Dropout (0.3), GAP, 35 epochs.
+
+    \vspace{0.2em}
+    \begin{figure}[H]
+    \centering
+    \includegraphics[width=0.95\linewidth, height=5.0cm, keepaspectratio]{figures/all_models_confusion_matrices.png}
+    \caption{Side-by-side $1{,}000\times 1{,}000$ confusion matrices for RF (97.00\%), BiLSTM (86.97\%), and 1D CNN (49.07\%).}
+    \end{figure}
+  \end{block}
+
+\end{column}
+
+\separatorcolumn
+
+% ----------------------------------------------------
+% COLUMN 3
+% ----------------------------------------------------
+\begin{column}{\colwidth}
+
+  \begin{block}{Analysis and Results}
+    Following hyperparameter optimization, the models were evaluated on the held-out test set containing \textbf{3{,}000 sessions} across \textbf{1{,}000 enrolled typists}. The results clearly indicate the superiority of the classical ensemble approach for this tabular feature space.
+
+    \begin{table}[H]
+    \centering
+    \small
+    \begin{tabular}{lcccccc}
+    \toprule
+    \textbf{Model} & \textbf{Accuracy} & \textbf{Macro F1} & \textbf{Correct/Total} & \textbf{EER} & \textbf{ROC-AUC} & \textbf{Factor} \\
+    \midrule
+    \textbf{Random Forest} & \textbf{97.00\%} & \textbf{0.9687} & \textbf{2{,}910 / 3{,}000} & \textbf{2.87\%} & \textbf{0.9998} & $\mathbf{970\times}$ \\
+    \textbf{BiLSTM} & 86.97\% & 0.8649 & 2{,}609 / 3{,}000 & 7.43\% & 0.9972 & $870\times$ \\
+    \textbf{1D CNN} & 49.07\% & 0.4606 & 1{,}472 / 3{,}000 & 24.12\% & 0.9575 & $490\times$ \\
+    \midrule
+    \emph{Random Chance} & 0.10\% & 0.0010 & $\approx 3$ / 3{,}000 & 50.00\% & 0.5000 & $1\times$ \\
+    \bottomrule
+    \end{tabular}
+    \caption{Benchmark Comparison on Test Set (1{,}000 Classes, 3{,}000 Sessions)}
+    \end{table}
+
+    \vspace{0.2em}
+    \begin{figure}[H]
+    \centering
+    \begin{minipage}{0.48\linewidth}
+      \centering
+      \includegraphics[width=\linewidth, height=5.8cm, keepaspectratio]{figures/model_accuracy_comparison.png}
+      \caption{Test Accuracy Comparison}
+    \end{minipage}\hfill
+    \begin{minipage}{0.48\linewidth}
+      \centering
+      \includegraphics[width=\linewidth, height=5.8cm, keepaspectratio]{figures/eer_comparison.png}
+      \caption{Equal Error Rate (EER) Comparison}
+    \end{minipage}
+    \end{figure}
+
+    \vspace{0.2em}
+    \textbf{Discussion:} The Random Forest classifier demonstrated exceptional performance, correctly identifying 2,910 out of 3,000 test sessions (97.00\%) and achieving a 2.87\% EER across 2.997 million impostor comparisons. The performance gap reveals a critical architectural insight: aggregating raw keystrokes into session-level statistical features naturally favors tree ensembles, which evaluate global metrics and digraph latencies as exchangeable predictors without assuming sequential continuity. BiLSTM remains competitive (86.97\%, $870\times$ baseline) by gating temporal dependencies across 12,000 training samples, whereas 1D CNN is bottlenecked by fixed local receptive fields across disparate feature regions.
+  \end{block}
+
+  \begin{block}{Conclusion}
+    This research validates that keystroke dynamics is a highly viable behavioral biometric for continuous authentication within Zero Trust Architectures at enterprise scale. Our findings demonstrate that a properly tuned \textbf{Random Forest model yields 97.00\% accuracy and a 2.87\% EER across 1{,}000 typists}. Importantly, this classical machine learning approach is computationally lightweight ($<$80s training, millisecond inference, $<$500\,MB RAM), making it exceptionally well-suited for continuous, non-intrusive background monitoring without draining system resources or interrupting user workflows.
+  \end{block}
+  
+  \begin{block}{References}
+    \footnotesize
+    [1] M. L. Ali et al., "Keystroke Dynamics-Based User Authentication Using Machine Learning," \textit{IEEE Access}, 2021. \\
+    [2] G. Stragapede et al., "Continuous Authentication via Free-Text Keystroke Dynamics," \textit{IEEE Trans. Biom.}, 2023. \\
+    [3] S. Rose et al., "Zero Trust Architecture," \textit{NIST Special Publication 800-207}, 2020. \\
+    [4] V. Monaco et al., "The Aalto University Keystroke Dataset," \textit{Proc. of CHI}, 2018.
+  \end{block}
+
+\end{column}
+
+\separatorcolumn
+\end{columns}
+\end{frame}
+
+\end{document}

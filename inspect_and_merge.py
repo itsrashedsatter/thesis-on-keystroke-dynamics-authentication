@@ -79,8 +79,8 @@ def run_inspection_and_merge():
     
     # 2. SUBSET + MERGE
     # Criteria: participants with at least N=15 completed typing sessions (TEST_SECTION_ID)
-    N_REQUIRED_SESSIONS = 15
-    K_PARTICIPANTS = 60
+    N_REQUIRED_SESSIONS = int(os.environ.get("N_REQUIRED_SESSIONS", 15))
+    K_PARTICIPANTS = int(os.environ.get("K_PARTICIPANTS", 1000))
     RANDOM_SEED = 42
     
     print(f"\nScanning for qualifying participants with >= {N_REQUIRED_SESSIONS} completed sessions...")
@@ -99,7 +99,7 @@ def run_inspection_and_merge():
                     "num_sessions": n_sec,
                     "num_keystrokes": len(df_temp)
                 })
-            if len(qualifying_participants) >= 500:  # Pool of 500 verified candidates
+            if len(qualifying_participants) >= max(2000, K_PARTICIPANTS * 2):
                 break
         except Exception:
             continue
